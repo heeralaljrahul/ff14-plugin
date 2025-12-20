@@ -23,6 +23,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private const string CommandName = "/pmycommand";
     private const string MachinistCommandName = "/pmachinist";
+    private const string BurstCommandName = "/pmchburst";
 
     public Configuration Configuration { get; init; }
 
@@ -60,6 +61,11 @@ public sealed class Plugin : IDalamudPlugin
             HelpMessage = "Opens the Machinist job interface window"
         });
 
+        CommandManager.AddHandler(BurstCommandName, new CommandInfo(OnBurstCommand)
+        {
+            HelpMessage = "Toggle Machinist burst mode on/off (can be used in macros)"
+        });
+
         // Tell the UI system that we want our windows to be drawn through the window system
         PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
 
@@ -92,6 +98,7 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.RemoveHandler(CommandName);
         CommandManager.RemoveHandler(MachinistCommandName);
+        CommandManager.RemoveHandler(BurstCommandName);
     }
 
     private void OnCommand(string command, string args)
@@ -104,6 +111,27 @@ public sealed class Plugin : IDalamudPlugin
     {
         // Toggle the Machinist job interface window
         MachinistWindow.Toggle();
+    }
+
+    private void OnBurstCommand(string command, string args)
+    {
+        // Toggle burst mode - can be used in macros
+        // Usage: /pmchburst [on|off] or just /pmchburst to toggle
+        var arg = args.Trim().ToLower();
+        if (arg == "on")
+        {
+            MachinistRotation.BurstModeEnabled = true;
+            Log.Information("Machinist Burst Mode: Enabled");
+        }
+        else if (arg == "off")
+        {
+            MachinistRotation.BurstModeEnabled = false;
+            Log.Information("Machinist Burst Mode: Disabled");
+        }
+        else
+        {
+            MachinistRotation.ToggleBurstMode();
+        }
     }
 
     public void ToggleConfigUi() => ConfigWindow.Toggle();
