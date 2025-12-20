@@ -19,6 +19,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static ITargetManager TargetManager { get; private set; } = null!;
     [PluginService] internal static IObjectTable ObjectTable { get; private set; } = null!;
+    [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
     private const string CommandName = "/pmycommand";
     private const string MachinistCommandName = "/pmachinist";
@@ -29,6 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     private ConfigWindow ConfigWindow { get; init; }
     private MainWindow MainWindow { get; init; }
     private MachinistWindow MachinistWindow { get; init; }
+    public MachinistRotation MachinistRotation { get; init; }
 
     public Plugin()
     {
@@ -38,9 +40,11 @@ public sealed class Plugin : IDalamudPlugin
         var goatImagePath = Path.Combine(PluginInterface.AssemblyLocation.Directory?.FullName!, "goat.png");
         var machinistImagePath = Path.Combine(PluginInterface.AssemblyLocation.Directory?.FullName!, "machinist.png");
 
+        MachinistRotation = new MachinistRotation();
+
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this, goatImagePath);
-        MachinistWindow = new MachinistWindow(this, machinistImagePath);
+        MachinistWindow = new MachinistWindow(this, machinistImagePath, MachinistRotation);
 
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);
@@ -84,6 +88,7 @@ public sealed class Plugin : IDalamudPlugin
         ConfigWindow.Dispose();
         MainWindow.Dispose();
         MachinistWindow.Dispose();
+        MachinistRotation.Dispose();
 
         CommandManager.RemoveHandler(CommandName);
         CommandManager.RemoveHandler(MachinistCommandName);

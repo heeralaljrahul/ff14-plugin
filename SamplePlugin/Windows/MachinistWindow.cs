@@ -15,38 +15,24 @@ public class MachinistWindow : Window, IDisposable
 {
     private readonly string machinistImagePath;
     private readonly Plugin plugin;
+    private readonly MachinistRotation rotation;
 
-    // Machinist Action IDs
-    private const uint HeatedSplitShot = 7411;
-    private const uint HeatedSlugShot = 7412;
-    private const uint HeatedCleanShot = 7413;
-    private const uint Drill = 16498;
-    private const uint AirAnchor = 16500;
-    private const uint ChainSaw = 25788;
-    private const uint GaussRound = 2874;
-    private const uint Ricochet = 2890;
-    private const uint Hypercharge = 17209;
-    private const uint HeatBlast = 7410;
-    private const uint Wildfire = 2878;
-    private const uint Reassemble = 2876;
-    private const uint BarrelStabilizer = 7414;
-
-    // Combo state tracking
-    private int currentComboStep;
+    // Manual action tracking
     private string lastActionResult = "";
     private DateTime lastActionTime = DateTime.MinValue;
 
-    public MachinistWindow(Plugin plugin, string machinistImagePath)
+    public MachinistWindow(Plugin plugin, string machinistImagePath, MachinistRotation rotation)
         : base("Machinist Job Interface##MachinistWindow", ImGuiWindowFlags.NoScrollbar)
     {
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(500, 650),
+            MinimumSize = new Vector2(520, 750),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue)
         };
 
         this.machinistImagePath = machinistImagePath;
         this.plugin = plugin;
+        this.rotation = rotation;
     }
 
     public void Dispose() { }
@@ -63,18 +49,18 @@ public class MachinistWindow : Window, IDisposable
         {
             if (child.Success)
             {
+                // Auto-Rotation Control Section (NEW - at the top for visibility)
+                DrawAutoRotationSection();
+
+                ImGuiHelpers.ScaledDummy(10.0f);
+
                 // Target Section
                 DrawTargetSection();
 
                 ImGuiHelpers.ScaledDummy(10.0f);
 
-                // Action Buttons Section
+                // Manual Action Buttons Section
                 DrawActionButtons();
-
-                ImGuiHelpers.ScaledDummy(10.0f);
-
-                // Combo Info Section
-                DrawComboInfo();
 
                 ImGuiHelpers.ScaledDummy(10.0f);
 
@@ -97,7 +83,7 @@ public class MachinistWindow : Window, IDisposable
         ImGui.PopStyleColor();
 
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.7f, 0.7f, 0.7f, 1.0f));
-        var subtitle = "Ranged Physical DPS - Action Controller";
+        var subtitle = "Ranged Physical DPS - Auto-Rotation";
         var subtitleSize = ImGui.CalcTextSize(subtitle);
         ImGui.SetCursorPosX((ImGui.GetWindowWidth() - subtitleSize.X) / 2);
         ImGui.Text(subtitle);
@@ -111,6 +97,152 @@ public class MachinistWindow : Window, IDisposable
             var imageSize = new Vector2(80, 80);
             ImGui.SetCursorPosX((ImGui.GetWindowWidth() - imageSize.X) / 2);
             ImGui.Image(machinistImage.Handle, imageSize);
+        }
+    }
+
+    private void DrawAutoRotationSection()
+    {
+        // Section header with status indicator
+        var statusColor = rotation.IsEnabled
+            ? new Vector4(0.2f, 1.0f, 0.2f, 1.0f)
+            : new Vector4(1.0f, 0.4f, 0.4f, 1.0f);
+
+        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1.0f, 0.85f, 0.0f, 1.0f));
+        ImGui.Text("Auto-Rotation Control");
+        ImGui.PopStyleColor();
+        ImGui.Separator();
+
+        using (ImRaii.PushIndent(10f))
+        {
+            // Status display
+            ImGui.TextColored(statusColor, rotation.IsEnabled ? "ACTIVE" : "INACTIVE");
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), $"- {rotation.RotationStatus}");
+
+            ImGuiHelpers.ScaledDummy(5.0f);
+
+            // Main control buttons
+            var buttonWidth = 140f;
+            var buttonHeight = 40f;
+
+            // Enable/Disable toggle
+            if (rotation.IsEnabled)
+            {
+                ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.7f, 0.2f, 0.2f, 1.0f));
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.3f, 0.3f, 1.0f));
+                if (ImGui.Button("Stop Rotation", new Vector2(buttonWidth, buttonHeight)))
+                {
+                    rotation.StopRotation();
+                    lastActionResult = "Auto-rotation stopped";
+                    lastActionTime = DateTime.Now;
+                }
+                ImGui.PopStyleColor(2);
+            }
+            else
+            {
+                ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.2f, 0.6f, 0.2f, 1.0f));
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.3f, 0.7f, 0.3f, 1.0f));
+                if (ImGui.Button("Start Rotation", new Vector2(buttonWidth, buttonHeight)))
+                {
+                    rotation.IsEnabled = true;
+                    lastActionResult = "Auto-rotation started";
+                    lastActionTime = DateTime.Now;
+                }
+                ImGui.PopStyleColor(2);
+            }
+
+            ImGui.SameLine();
+
+            // Opener button
+            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.6f, 0.4f, 0.1f, 1.0f));
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.7f, 0.5f, 0.2f, 1.0f));
+            var openerLabel = rotation.IsInOpener ? "Reset Opener" : "Start Opener";
+            if (ImGui.Button(openerLabel, new Vector2(buttonWidth, buttonHeight)))
+            {
+                if (rotation.IsInOpener)
+                {
+                    rotation.ResetOpener();
+                    lastActionResult = "Opener reset";
+                }
+                else
+                {
+                    rotation.IsEnabled = true;
+                    rotation.StartOpener();
+                    lastActionResult = "Opener started - executing optimal burst sequence";
+                }
+                lastActionTime = DateTime.Now;
+            }
+            ImGui.PopStyleColor(2);
+
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Execute the standard Machinist opener:\nReassemble > Air Anchor > Drill > ...\nIncludes proper oGCD weaving");
+
+            ImGui.SameLine();
+
+            // Target + Start button (convenience)
+            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.4f, 0.2f, 0.6f, 1.0f));
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.5f, 0.3f, 0.7f, 1.0f));
+            if (ImGui.Button("Target & Fight", new Vector2(buttonWidth, buttonHeight)))
+            {
+                TargetNearestEnemy();
+                if (Plugin.TargetManager.Target != null)
+                {
+                    rotation.IsEnabled = true;
+                    rotation.StartOpener();
+                    lastActionResult = "Targeted enemy and started opener";
+                }
+                lastActionTime = DateTime.Now;
+            }
+            ImGui.PopStyleColor(2);
+
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Target nearest enemy and immediately\nstart the opener rotation");
+
+            ImGuiHelpers.ScaledDummy(8.0f);
+
+            // Rotation info panel
+            using (ImRaii.PushColor(ImGuiCol.ChildBg, new Vector4(0.15f, 0.15f, 0.2f, 1.0f)))
+            {
+                using (var infoChild = ImRaii.Child("RotationInfo", new Vector2(-1, 80), true))
+                {
+                    if (infoChild.Success)
+                    {
+                        // Next action preview
+                        ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.8f, 1.0f), "Next Action:");
+                        ImGui.SameLine();
+                        ImGui.TextColored(new Vector4(0.4f, 0.9f, 1.0f, 1.0f), rotation.GetNextActionPreview());
+
+                        // Last action
+                        ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.8f, 1.0f), "Last Action:");
+                        ImGui.SameLine();
+                        ImGui.TextColored(new Vector4(0.6f, 1.0f, 0.6f, 1.0f),
+                            string.IsNullOrEmpty(rotation.LastAction) ? "None" : rotation.LastAction);
+
+                        // Opener progress (if in opener)
+                        if (rotation.IsInOpener)
+                        {
+                            ImGui.TextColored(new Vector4(1.0f, 0.8f, 0.2f, 1.0f),
+                                $"Opener Progress: Step {rotation.OpenerStep}/29");
+
+                            // Progress bar
+                            var progress = rotation.OpenerStep / 29f;
+                            ImGui.ProgressBar(progress, new Vector2(-1, 16), $"{progress * 100:F0}%%");
+                        }
+                        else
+                        {
+                            // Combo state
+                            var comboText = rotation.ComboStep switch
+                            {
+                                0 => "1-2-3 Combo: Ready for Split Shot",
+                                1 => "1-2-3 Combo: Ready for Slug Shot",
+                                2 => "1-2-3 Combo: Ready for Clean Shot",
+                                _ => "1-2-3 Combo: Unknown"
+                            };
+                            ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), comboText);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -143,17 +275,18 @@ public class MachinistWindow : Window, IDisposable
             ImGuiHelpers.ScaledDummy(5.0f);
 
             // Target buttons
-            if (ImGui.Button("Target Nearest Enemy", new Vector2(180, 30)))
+            if (ImGui.Button("Target Nearest Enemy", new Vector2(180, 28)))
             {
                 TargetNearestEnemy();
             }
 
             ImGui.SameLine();
 
-            if (ImGui.Button("Clear Target", new Vector2(120, 30)))
+            if (ImGui.Button("Clear Target", new Vector2(120, 28)))
             {
                 Plugin.TargetManager.Target = null;
                 lastActionResult = "Target cleared";
+                lastActionTime = DateTime.Now;
             }
 
             ImGuiHelpers.ScaledDummy(5.0f);
@@ -199,6 +332,7 @@ public class MachinistWindow : Window, IDisposable
                 {
                     Plugin.TargetManager.Target = enemy;
                     lastActionResult = $"Targeted: {enemy.Name}";
+                    lastActionTime = DateTime.Now;
                 }
             }
         }
@@ -207,220 +341,102 @@ public class MachinistWindow : Window, IDisposable
     private void DrawActionButtons()
     {
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.4f, 0.7f, 1.0f, 1.0f));
-        ImGui.Text("Basic Combo Actions");
+        ImGui.Text("Manual Actions (use when auto-rotation is off)");
         ImGui.PopStyleColor();
         ImGui.Separator();
 
-        using (ImRaii.PushIndent(10f))
+        // Show collapsed manual controls if auto-rotation is running
+        if (rotation.IsEnabled)
         {
-            // Combo buttons with visual feedback
-            var buttonSize = new Vector2(150, 40);
-
-            // Step 1: Heated Split Shot
-            var step1Color = currentComboStep == 0
-                ? new Vector4(0.2f, 0.6f, 0.2f, 1.0f)
-                : new Vector4(0.3f, 0.3f, 0.3f, 1.0f);
-            ImGui.PushStyleColor(ImGuiCol.Button, step1Color);
-            if (ImGui.Button("1: Heated Split Shot", buttonSize))
+            using (ImRaii.PushIndent(10f))
             {
-                ExecuteAction(HeatedSplitShot, "Heated Split Shot");
-                currentComboStep = 1;
+                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f),
+                    "Auto-rotation is active. Stop it to use manual controls.");
+
+                if (ImGui.Button("Expand Manual Controls"))
+                {
+                    // This just shows the section, could use a state variable
+                }
             }
-            ImGui.PopStyleColor();
-
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Potency: 220\nGenerates 5 Heat");
-
-            ImGui.SameLine();
-
-            // Step 2: Heated Slug Shot
-            var step2Color = currentComboStep == 1
-                ? new Vector4(0.2f, 0.6f, 0.2f, 1.0f)
-                : new Vector4(0.3f, 0.3f, 0.3f, 1.0f);
-            ImGui.PushStyleColor(ImGuiCol.Button, step2Color);
-            if (ImGui.Button("2: Heated Slug Shot", buttonSize))
-            {
-                ExecuteAction(HeatedSlugShot, "Heated Slug Shot");
-                currentComboStep = 2;
-            }
-            ImGui.PopStyleColor();
-
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Potency: 140 (Combo: 340)\nGenerates 5 Heat");
-
-            ImGui.SameLine();
-
-            // Step 3: Heated Clean Shot
-            var step3Color = currentComboStep == 2
-                ? new Vector4(0.2f, 0.6f, 0.2f, 1.0f)
-                : new Vector4(0.3f, 0.3f, 0.3f, 1.0f);
-            ImGui.PushStyleColor(ImGuiCol.Button, step3Color);
-            if (ImGui.Button("3: Heated Clean Shot", buttonSize))
-            {
-                ExecuteAction(HeatedCleanShot, "Heated Clean Shot");
-                currentComboStep = 0;
-            }
-            ImGui.PopStyleColor();
-
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Potency: 160 (Combo: 440)\nGenerates 5 Heat + 10 Battery");
+            return;
         }
 
-        ImGuiHelpers.ScaledDummy(10.0f);
-
-        // Burst abilities
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1.0f, 0.6f, 0.2f, 1.0f));
-        ImGui.Text("Burst Abilities");
-        ImGui.PopStyleColor();
-        ImGui.Separator();
-
         using (ImRaii.PushIndent(10f))
         {
-            var burstSize = new Vector2(110, 35);
+            // Basic combo
+            var buttonSize = new Vector2(145, 35);
+
+            ImGui.TextColored(new Vector4(0.6f, 0.8f, 1.0f, 1.0f), "Basic Combo:");
+
+            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.2f, 0.4f, 0.6f, 1.0f));
+
+            if (ImGui.Button("1: Split Shot", buttonSize))
+                ExecuteAction(MachinistRotation.HeatedSplitShot, "Heated Split Shot");
+            ImGui.SameLine();
+            if (ImGui.Button("2: Slug Shot", buttonSize))
+                ExecuteAction(MachinistRotation.HeatedSlugShot, "Heated Slug Shot");
+            ImGui.SameLine();
+            if (ImGui.Button("3: Clean Shot", buttonSize))
+                ExecuteAction(MachinistRotation.HeatedCleanShot, "Heated Clean Shot");
+
+            ImGui.PopStyleColor();
+
+            ImGuiHelpers.ScaledDummy(5.0f);
+
+            // Burst tools
+            ImGui.TextColored(new Vector4(1.0f, 0.6f, 0.2f, 1.0f), "Burst Tools:");
 
             ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.6f, 0.3f, 0.1f, 1.0f));
 
-            if (ImGui.Button("Reassemble", burstSize))
-                ExecuteAction(Reassemble, "Reassemble");
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Guarantees critical direct hit\nRecast: 55s");
-
+            if (ImGui.Button("Drill", new Vector2(100, 30)))
+                ExecuteAction(MachinistRotation.Drill, "Drill");
             ImGui.SameLine();
-
-            if (ImGui.Button("Drill", burstSize))
-                ExecuteAction(Drill, "Drill");
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Potency: 600\nRecast: 20s");
-
+            if (ImGui.Button("Air Anchor", new Vector2(100, 30)))
+                ExecuteAction(MachinistRotation.AirAnchor, "Air Anchor");
             ImGui.SameLine();
-
-            if (ImGui.Button("Air Anchor", burstSize))
-                ExecuteAction(AirAnchor, "Air Anchor");
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Potency: 600\nBattery +20\nRecast: 40s");
-
+            if (ImGui.Button("Chain Saw", new Vector2(100, 30)))
+                ExecuteAction(MachinistRotation.ChainSaw, "Chain Saw");
             ImGui.SameLine();
-
-            if (ImGui.Button("Chain Saw", burstSize))
-                ExecuteAction(ChainSaw, "Chain Saw");
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Potency: 600\nBattery +20\nRecast: 60s");
+            if (ImGui.Button("Reassemble", new Vector2(100, 30)))
+                ExecuteAction(MachinistRotation.Reassemble, "Reassemble");
 
             ImGui.PopStyleColor();
-        }
 
-        ImGuiHelpers.ScaledDummy(10.0f);
+            ImGuiHelpers.ScaledDummy(5.0f);
 
-        // Hypercharge abilities
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1.0f, 0.3f, 0.3f, 1.0f));
-        ImGui.Text("Hypercharge Window");
-        ImGui.PopStyleColor();
-        ImGui.Separator();
-
-        using (ImRaii.PushIndent(10f))
-        {
-            var hyperSize = new Vector2(130, 35);
+            // Hypercharge
+            ImGui.TextColored(new Vector4(1.0f, 0.3f, 0.3f, 1.0f), "Hypercharge:");
 
             ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.5f, 0.1f, 0.1f, 1.0f));
 
-            if (ImGui.Button("Barrel Stabilizer", hyperSize))
-                ExecuteAction(BarrelStabilizer, "Barrel Stabilizer");
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Generates 50 Heat\nRecast: 120s");
-
+            if (ImGui.Button("Barrel Stab", new Vector2(100, 30)))
+                ExecuteAction(MachinistRotation.BarrelStabilizer, "Barrel Stabilizer");
             ImGui.SameLine();
-
-            if (ImGui.Button("Hypercharge", hyperSize))
-                ExecuteAction(Hypercharge, "Hypercharge");
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Consumes 50 Heat\nEnables Heat Blast for 8s");
-
+            if (ImGui.Button("Hypercharge", new Vector2(100, 30)))
+                ExecuteAction(MachinistRotation.Hypercharge, "Hypercharge");
             ImGui.SameLine();
-
-            if (ImGui.Button("Heat Blast", hyperSize))
-                ExecuteAction(HeatBlast, "Heat Blast");
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Potency: 200\nRecast: 1.5s\nReduces oGCD cooldowns by 15s");
-
-            if (ImGui.Button("Wildfire", hyperSize))
-                ExecuteAction(Wildfire, "Wildfire");
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Marks target\n240 potency per weaponskill (max 6)");
+            if (ImGui.Button("Heat Blast", new Vector2(100, 30)))
+                ExecuteAction(MachinistRotation.HeatBlast, "Heat Blast");
+            ImGui.SameLine();
+            if (ImGui.Button("Wildfire", new Vector2(100, 30)))
+                ExecuteAction(MachinistRotation.Wildfire, "Wildfire");
 
             ImGui.PopStyleColor();
-        }
 
-        ImGuiHelpers.ScaledDummy(10.0f);
+            ImGuiHelpers.ScaledDummy(5.0f);
 
-        // oGCD abilities
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.6f, 0.9f, 0.6f, 1.0f));
-        ImGui.Text("oGCD Weaving");
-        ImGui.PopStyleColor();
-        ImGui.Separator();
-
-        using (ImRaii.PushIndent(10f))
-        {
-            var ogcdSize = new Vector2(120, 35);
+            // oGCDs
+            ImGui.TextColored(new Vector4(0.6f, 0.9f, 0.6f, 1.0f), "oGCDs:");
 
             ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.1f, 0.4f, 0.1f, 1.0f));
 
-            if (ImGui.Button("Gauss Round", ogcdSize))
-                ExecuteAction(GaussRound, "Gauss Round");
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Potency: 130\n3 charges");
-
+            if (ImGui.Button("Gauss Round", new Vector2(120, 30)))
+                ExecuteAction(MachinistRotation.GaussRound, "Gauss Round");
             ImGui.SameLine();
-
-            if (ImGui.Button("Ricochet", ogcdSize))
-                ExecuteAction(Ricochet, "Ricochet");
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Potency: 130 (AoE)\n3 charges");
+            if (ImGui.Button("Ricochet", new Vector2(120, 30)))
+                ExecuteAction(MachinistRotation.Ricochet, "Ricochet");
 
             ImGui.PopStyleColor();
-        }
-    }
-
-    private void DrawComboInfo()
-    {
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.9f, 0.9f, 0.3f, 1.0f));
-        ImGui.Text("Combo State");
-        ImGui.PopStyleColor();
-        ImGui.Separator();
-
-        using (ImRaii.PushIndent(10f))
-        {
-            var comboText = currentComboStep switch
-            {
-                0 => "Ready for: Heated Split Shot (Step 1)",
-                1 => "Ready for: Heated Slug Shot (Step 2)",
-                2 => "Ready for: Heated Clean Shot (Step 3)",
-                _ => "Unknown state"
-            };
-
-            ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.8f, 1.0f), comboText);
-
-            // Visual combo indicator
-            ImGui.Text("Combo Progress: ");
-            ImGui.SameLine();
-
-            for (var i = 0; i < 3; i++)
-            {
-                var color = i < currentComboStep
-                    ? new Vector4(0.2f, 0.8f, 0.2f, 1.0f)
-                    : i == currentComboStep
-                        ? new Vector4(1.0f, 0.8f, 0.0f, 1.0f)
-                        : new Vector4(0.3f, 0.3f, 0.3f, 1.0f);
-
-                ImGui.TextColored(color, i < currentComboStep ? "[*]" : i == currentComboStep ? "[>]" : "[ ]");
-                if (i < 2)
-                    ImGui.SameLine();
-            }
-
-            if (ImGui.Button("Reset Combo"))
-            {
-                currentComboStep = 0;
-                lastActionResult = "Combo reset";
-            }
         }
     }
 
@@ -442,6 +458,12 @@ public class MachinistWindow : Window, IDisposable
             else
             {
                 ImGui.TextColored(new Vector4(0.5f, 0.5f, 0.5f, 1.0f), "No actions performed yet");
+            }
+
+            // Also show rotation's last action
+            if (rotation.IsEnabled && !string.IsNullOrEmpty(rotation.LastAction))
+            {
+                ImGui.TextColored(new Vector4(0.4f, 0.8f, 1.0f, 1.0f), $"> [Auto] {rotation.LastAction}");
             }
         }
     }
@@ -486,7 +508,6 @@ public class MachinistWindow : Window, IDisposable
         var target = Plugin.TargetManager.Target;
         var targetId = target?.GameObjectId ?? 0xE0000000;
 
-        // Use FFXIVClientStructs to execute the action
         var actionManager = ActionManager.Instance();
         if (actionManager == null)
         {
@@ -495,7 +516,6 @@ public class MachinistWindow : Window, IDisposable
             return;
         }
 
-        // Check if action is available
         var actionStatus = actionManager->GetActionStatus(ActionType.Action, actionId);
         if (actionStatus != 0)
         {
@@ -504,7 +524,6 @@ public class MachinistWindow : Window, IDisposable
             return;
         }
 
-        // Execute the action
         var result = actionManager->UseAction(ActionType.Action, actionId, targetId);
 
         if (result)
