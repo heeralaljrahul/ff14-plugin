@@ -19,12 +19,14 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
     private const string CommandName = "/pmycommand";
+    private const string MachinistCommandName = "/pmachinist";
 
     public Configuration Configuration { get; init; }
 
     public readonly WindowSystem WindowSystem = new("SamplePlugin");
     private ConfigWindow ConfigWindow { get; init; }
     private MainWindow MainWindow { get; init; }
+    private MachinistWindow MachinistWindow { get; init; }
 
     public Plugin()
     {
@@ -32,16 +34,24 @@ public sealed class Plugin : IDalamudPlugin
 
         // You might normally want to embed resources and load them from the manifest stream
         var goatImagePath = Path.Combine(PluginInterface.AssemblyLocation.Directory?.FullName!, "goat.png");
+        var machinistImagePath = Path.Combine(PluginInterface.AssemblyLocation.Directory?.FullName!, "machinist.png");
 
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this, goatImagePath);
+        MachinistWindow = new MachinistWindow(this, machinistImagePath);
 
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);
+        WindowSystem.AddWindow(MachinistWindow);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
             HelpMessage = "A useful message to display in /xlhelp"
+        });
+
+        CommandManager.AddHandler(MachinistCommandName, new CommandInfo(OnMachinistCommand)
+        {
+            HelpMessage = "Opens the Machinist job interface window"
         });
 
         // Tell the UI system that we want our windows to be drawn through the window system
@@ -71,8 +81,10 @@ public sealed class Plugin : IDalamudPlugin
 
         ConfigWindow.Dispose();
         MainWindow.Dispose();
+        MachinistWindow.Dispose();
 
         CommandManager.RemoveHandler(CommandName);
+        CommandManager.RemoveHandler(MachinistCommandName);
     }
 
     private void OnCommand(string command, string args)
@@ -80,7 +92,14 @@ public sealed class Plugin : IDalamudPlugin
         // In response to the slash command, toggle the display status of our main ui
         MainWindow.Toggle();
     }
-    
+
+    private void OnMachinistCommand(string command, string args)
+    {
+        // Toggle the Machinist job interface window
+        MachinistWindow.Toggle();
+    }
+
     public void ToggleConfigUi() => ConfigWindow.Toggle();
     public void ToggleMainUi() => MainWindow.Toggle();
+    public void ToggleMachinistUi() => MachinistWindow.Toggle();
 }
