@@ -8,7 +8,7 @@ namespace SamplePlugin;
 
 public class MachinistRotation : IDisposable
 {
-    // Machinist Action IDs
+    // Machinist Action IDs - Single Target
     public const uint HeatedSplitShot = 7411;
     public const uint HeatedSlugShot = 7412;
     public const uint HeatedCleanShot = 7413;
@@ -27,8 +27,6 @@ public class MachinistRotation : IDisposable
     public const uint Wildfire = 2878;
     public const uint Reassemble = 2876;
     public const uint BarrelStabilizer = 7414;
-    public const uint Automaton = 2864;
-    public const uint QueenOverdrive = 16502;
 
     // Reference to settings
     private MachinistSettings Settings => Plugin.PluginInterface.GetPluginConfig() is Configuration config
@@ -44,20 +42,6 @@ public class MachinistRotation : IDisposable
     public string NextAction { get; private set; } = "";
     public string RotationStatus { get; private set; } = "Idle";
 
-    // Burst Mode - can be toggled independently
-    public bool BurstModeEnabled
-    {
-        get => Settings.BurstModeEnabled;
-        set
-        {
-            if (Plugin.PluginInterface.GetPluginConfig() is Configuration config)
-            {
-                config.Machinist.BurstModeEnabled = value;
-                config.Save();
-            }
-        }
-    }
-
     // Timing
     private DateTime lastActionTime = DateTime.MinValue;
     private DateTime lastGcdTime = DateTime.MinValue;
@@ -66,7 +50,7 @@ public class MachinistRotation : IDisposable
     private bool isInHypercharge;
     private int hyperchargeStacks;
 
-    // Opener sequence (standard level 100 opener)
+    // Opener sequence (standard level 100 opener) - filtered by settings at runtime
     private readonly List<(uint ActionId, bool IsOGcd, string Name)> openerSequence =
     [
         (Reassemble, true, "Reassemble"),
@@ -110,21 +94,31 @@ public class MachinistRotation : IDisposable
         Plugin.Framework.Update -= OnFrameworkUpdate;
     }
 
-    public void ToggleBurstMode()
+    /// <summary>
+    /// Called when user presses any basic combo button - auto-starts the rotation
+    /// </summary>
+    public void OnComboButtonPressed()
     {
-        BurstModeEnabled = !BurstModeEnabled;
-        Plugin.Log.Information($"Machinist Burst Mode: {(BurstModeEnabled ? "Enabled" : "Disabled")}");
+        if (!IsEnabled)
+        {
+            IsEnabled = true;
+
+            // Start opener if enabled in settings
+            if (Settings.UseOpener)
+            {
+                StartOpener();
+            }
+            else
+            {
+                RotationStatus = "Running";
+            }
+
+            Plugin.Log.Information("Auto-rotation started via combo button press");
+        }
     }
 
     public void StartOpener()
     {
-        if (!BurstModeEnabled)
-        {
-            Plugin.Log.Information("Cannot start opener - Burst Mode is disabled");
-            RotationStatus = "Burst Mode Off";
-            return;
-        }
-
         IsInOpener = true;
         OpenerStep = 0;
         ComboStep = 0;
@@ -158,6 +152,7 @@ public class MachinistRotation : IDisposable
         if (!IsEnabled)
             return;
 
+        // Use the player's selected target
         var target = Plugin.TargetManager.Target;
         if (target == null || target is not IBattleChara battleTarget)
         {
@@ -177,7 +172,7 @@ public class MachinistRotation : IDisposable
         if (timeSinceLastAction < 0.1f)
             return;
 
-        if (IsInOpener && BurstModeEnabled)
+        if (IsInOpener)
         {
             ExecuteOpener(target.GameObjectId);
         }
@@ -199,7 +194,7 @@ public class MachinistRotation : IDisposable
 
         var (actionId, isOGcd, actionName) = openerSequence[OpenerStep];
 
-        // Check if this action is enabled in settings
+        // Check if this action is enabled in settings - skip if disabled
         if (!IsActionEnabledInSettings(actionId))
         {
             OpenerStep++;
@@ -245,12 +240,12 @@ public class MachinistRotation : IDisposable
         if (actionManager == null)
             return;
 
-        RotationStatus = BurstModeEnabled ? "Running" : "Running (No Burst)";
+        RotationStatus = "Running";
 
         var timeSinceLastGcd = (float)(DateTime.Now - lastGcdTime).TotalSeconds;
         var timeSinceLastAction = (float)(DateTime.Now - lastActionTime).TotalSeconds;
 
-        // Try to weave oGCDs first if we're in the GCD window
+        // Try to weave oGCDs if we're in the GCD window
         if (timeSinceLastGcd >= 0.6f && timeSinceLastGcd < 2.0f && timeSinceLastAction >= OGcdLockout)
         {
             if (TryUseOGcd(actionManager, targetId))
@@ -258,10 +253,6 @@ public class MachinistRotation : IDisposable
         }
 
         if (timeSinceLastGcd < GcdLockout)
-            return;
-
-        // Priority: Burst GCDs > Hypercharge GCDs > Combo GCDs
-        if (BurstModeEnabled && TryUseBurstGcd(actionManager, targetId))
             return;
 
         // Check for Heat Blast during Hypercharge
@@ -276,22 +267,25 @@ public class MachinistRotation : IDisposable
             }
         }
 
+        // Priority: Burst GCDs > Combo GCDs
+        if (TryUseBurstGcd(actionManager, targetId))
+            return;
+
         // Basic combo
-        if (Settings.UseBasicCombo)
-            TryUseComboGcd(actionManager, targetId);
+        TryUseComboGcd(actionManager, targetId);
     }
 
     private unsafe bool TryUseOGcd(ActionManager* actionManager, ulong targetId)
     {
-        // Barrel Stabilizer (only in burst mode)
-        if (BurstModeEnabled && Settings.UseBarrelStabilizer && IsActionReady(actionManager, BarrelStabilizer))
+        // Barrel Stabilizer
+        if (Settings.UseBarrelStabilizer && IsActionReady(actionManager, BarrelStabilizer))
         {
             if (TryUseAction(actionManager, BarrelStabilizer, targetId, "Barrel Stabilizer", true))
                 return true;
         }
 
-        // Hypercharge (only in burst mode)
-        if (BurstModeEnabled && Settings.UseHypercharge && !isInHypercharge && IsActionReady(actionManager, Hypercharge))
+        // Hypercharge
+        if (Settings.UseHypercharge && !isInHypercharge && IsActionReady(actionManager, Hypercharge))
         {
             if (TryUseAction(actionManager, Hypercharge, targetId, "Hypercharge", true))
             {
@@ -301,14 +295,14 @@ public class MachinistRotation : IDisposable
             }
         }
 
-        // Wildfire during Hypercharge (only in burst mode)
-        if (BurstModeEnabled && Settings.UseWildfire && isInHypercharge && IsActionReady(actionManager, Wildfire))
+        // Wildfire during Hypercharge
+        if (Settings.UseWildfire && isInHypercharge && IsActionReady(actionManager, Wildfire))
         {
             if (TryUseAction(actionManager, Wildfire, targetId, "Wildfire", true))
                 return true;
         }
 
-        // Gauss Round / Double Check (always available, but can be toggled)
+        // Gauss Round / Double Check
         if (Settings.UseGaussRound)
         {
             if (IsActionReady(actionManager, GaussRound))
@@ -323,7 +317,7 @@ public class MachinistRotation : IDisposable
             }
         }
 
-        // Ricochet / Checkmate (always available, but can be toggled)
+        // Ricochet / Checkmate
         if (Settings.UseRicochet)
         {
             if (IsActionReady(actionManager, Ricochet))
@@ -343,9 +337,6 @@ public class MachinistRotation : IDisposable
 
     private unsafe bool TryUseBurstGcd(ActionManager* actionManager, ulong targetId)
     {
-        if (!BurstModeEnabled)
-            return false;
-
         var hasReassemble = Settings.UseReassemble && IsActionReady(actionManager, Reassemble);
 
         // Drill
@@ -462,7 +453,7 @@ public class MachinistRotation : IDisposable
             GaussRound or DoubleCheck => Settings.UseGaussRound,
             Ricochet or Checkmate => Settings.UseRicochet,
             HeatBlast or BlazingShot => Settings.UseHeatBlast,
-            HeatedSplitShot or HeatedSlugShot or HeatedCleanShot => Settings.UseBasicCombo,
+            HeatedSplitShot or HeatedSlugShot or HeatedCleanShot => true, // Basic combo always enabled
             _ => true
         };
     }
@@ -483,12 +474,30 @@ public class MachinistRotation : IDisposable
         if (!IsEnabled)
             return "Rotation disabled";
 
-        if (!BurstModeEnabled)
-            return "[No Burst] " + (string.IsNullOrEmpty(NextAction) ? "Basic combo only" : NextAction);
-
         if (IsInOpener && OpenerStep < openerSequence.Count)
             return $"[Opener] {openerSequence[OpenerStep].Name}";
 
-        return NextAction;
+        return string.IsNullOrEmpty(NextAction) ? "Basic combo" : NextAction;
+    }
+
+    /// <summary>
+    /// Gets the count of abilities currently enabled in the combo
+    /// </summary>
+    public int GetEnabledAbilityCount()
+    {
+        var count = 0;
+        if (Settings.UseDrill) count++;
+        if (Settings.UseAirAnchor) count++;
+        if (Settings.UseChainSaw) count++;
+        if (Settings.UseExcavator) count++;
+        if (Settings.UseFullMetalField) count++;
+        if (Settings.UseReassemble) count++;
+        if (Settings.UseBarrelStabilizer) count++;
+        if (Settings.UseHypercharge) count++;
+        if (Settings.UseHeatBlast) count++;
+        if (Settings.UseWildfire) count++;
+        if (Settings.UseGaussRound) count++;
+        if (Settings.UseRicochet) count++;
+        return count;
     }
 }
