@@ -233,7 +233,12 @@ public class MachinistWindow : Window, IDisposable
             // Opener toggle
             ImGuiHelpers.ScaledDummy(3.0f);
             ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.9f, 0.6f, 1.0f, 1.0f));
-            changed |= ImGui.Checkbox("Use Opener Sequence", ref settings.UseOpener);
+            var useOpener = settings.UseOpener;
+            if (ImGui.Checkbox("Use Opener Sequence", ref useOpener))
+            {
+                settings.UseOpener = useOpener;
+                changed = true;
+            }
             ImGui.PopStyleColor();
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip("When enabled, starting the combo will execute\nthe optimal opener sequence first.\n\nThe opener uses all enabled abilities below.");
@@ -245,15 +250,15 @@ public class MachinistWindow : Window, IDisposable
             ImGui.Text("Burst GCDs (main damage)");
             ImGui.PopStyleColor();
 
-            changed |= DrawAbilityToggle("Drill", ref settings.UseDrill, "High potency single-target attack");
+            changed |= DrawAbilityToggle("Drill", settings.UseDrill, v => settings.UseDrill = v, "High potency single-target attack");
             ImGui.SameLine();
-            changed |= DrawAbilityToggle("Air Anchor", ref settings.UseAirAnchor, "High potency + Battery gauge");
+            changed |= DrawAbilityToggle("Air Anchor", settings.UseAirAnchor, v => settings.UseAirAnchor = v, "High potency + Battery gauge");
             ImGui.SameLine();
-            changed |= DrawAbilityToggle("Chain Saw", ref settings.UseChainSaw, "High potency attack");
+            changed |= DrawAbilityToggle("Chain Saw", settings.UseChainSaw, v => settings.UseChainSaw = v, "High potency attack");
 
-            changed |= DrawAbilityToggle("Excavator", ref settings.UseExcavator, "Follow-up to Chain Saw");
+            changed |= DrawAbilityToggle("Excavator", settings.UseExcavator, v => settings.UseExcavator = v, "Follow-up to Chain Saw");
             ImGui.SameLine();
-            changed |= DrawAbilityToggle("Full Metal Field", ref settings.UseFullMetalField, "Powerful finisher");
+            changed |= DrawAbilityToggle("Full Metal Field", settings.UseFullMetalField, v => settings.UseFullMetalField = v, "Powerful finisher");
 
             ImGuiHelpers.ScaledDummy(8.0f);
 
@@ -262,11 +267,11 @@ public class MachinistWindow : Window, IDisposable
             ImGui.Text("Hypercharge Window");
             ImGui.PopStyleColor();
 
-            changed |= DrawAbilityToggle("Hypercharge", ref settings.UseHypercharge, "Activate heat mode for Heat Blasts");
+            changed |= DrawAbilityToggle("Hypercharge", settings.UseHypercharge, v => settings.UseHypercharge = v, "Activate heat mode for Heat Blasts");
             ImGui.SameLine();
-            changed |= DrawAbilityToggle("Heat Blast", ref settings.UseHeatBlast, "Fast attacks during Hypercharge");
+            changed |= DrawAbilityToggle("Heat Blast", settings.UseHeatBlast, v => settings.UseHeatBlast = v, "Fast attacks during Hypercharge");
             ImGui.SameLine();
-            changed |= DrawAbilityToggle("Wildfire", ref settings.UseWildfire, "Burst damage during Hypercharge");
+            changed |= DrawAbilityToggle("Wildfire", settings.UseWildfire, v => settings.UseWildfire = v, "Burst damage during Hypercharge");
 
             ImGuiHelpers.ScaledDummy(8.0f);
 
@@ -275,13 +280,13 @@ public class MachinistWindow : Window, IDisposable
             ImGui.Text("Buffs & oGCDs");
             ImGui.PopStyleColor();
 
-            changed |= DrawAbilityToggle("Reassemble", ref settings.UseReassemble, "Guarantees crit on next GCD");
+            changed |= DrawAbilityToggle("Reassemble", settings.UseReassemble, v => settings.UseReassemble = v, "Guarantees crit on next GCD");
             ImGui.SameLine();
-            changed |= DrawAbilityToggle("Barrel Stabilizer", ref settings.UseBarrelStabilizer, "Generates Heat gauge");
+            changed |= DrawAbilityToggle("Barrel Stabilizer", settings.UseBarrelStabilizer, v => settings.UseBarrelStabilizer = v, "Generates Heat gauge");
 
-            changed |= DrawAbilityToggle("Gauss Round", ref settings.UseGaussRound, "Weave oGCD damage");
+            changed |= DrawAbilityToggle("Gauss Round", settings.UseGaussRound, v => settings.UseGaussRound = v, "Weave oGCD damage");
             ImGui.SameLine();
-            changed |= DrawAbilityToggle("Ricochet", ref settings.UseRicochet, "Weave oGCD damage");
+            changed |= DrawAbilityToggle("Ricochet", settings.UseRicochet, v => settings.UseRicochet = v, "Weave oGCD damage");
 
             if (changed)
             {
@@ -325,9 +330,14 @@ public class MachinistWindow : Window, IDisposable
         }
     }
 
-    private static bool DrawAbilityToggle(string label, ref bool value, string tooltip)
+    private static bool DrawAbilityToggle(string label, bool value, Action<bool> setter, string tooltip)
     {
-        var changed = ImGui.Checkbox(label, ref value);
+        var localValue = value;
+        var changed = ImGui.Checkbox(label, ref localValue);
+        if (changed)
+        {
+            setter(localValue);
+        }
         if (ImGui.IsItemHovered() && !string.IsNullOrEmpty(tooltip))
             ImGui.SetTooltip(tooltip);
         return changed;
@@ -379,7 +389,7 @@ public class MachinistWindow : Window, IDisposable
     {
         ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Nearby Enemies:");
 
-        var localPlayer = Plugin.ObjectTable.FirstOrDefault(o => o is IPlayerCharacter);
+        var localPlayer = Plugin.ClientState.LocalPlayer;
         if (localPlayer == null)
         {
             ImGui.TextColored(new Vector4(0.5f, 0.5f, 0.5f, 1.0f), "  Player not loaded");
@@ -458,7 +468,7 @@ public class MachinistWindow : Window, IDisposable
 
     private void TargetNearestEnemy()
     {
-        var localPlayer = Plugin.ObjectTable.FirstOrDefault(o => o is IPlayerCharacter);
+        var localPlayer = Plugin.ClientState.LocalPlayer;
         if (localPlayer == null)
         {
             lastActionResult = "Error: Player not loaded";
