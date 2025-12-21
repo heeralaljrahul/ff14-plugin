@@ -23,25 +23,29 @@ public class Configuration : IPluginConfiguration
 [Serializable]
 public class MachinistSettings
 {
-    // Burst Mode
-    public bool BurstModeEnabled { get; set; } = true;
+    // ===== SINGLE TARGET COMBO ABILITIES =====
+    // These abilities will be woven into the single-target rotation when enabled
 
-    // GCD Abilities
+    // Burst GCDs (main damage abilities)
     public bool UseDrill { get; set; } = true;
     public bool UseAirAnchor { get; set; } = true;
     public bool UseChainSaw { get; set; } = true;
     public bool UseExcavator { get; set; } = true;
     public bool UseFullMetalField { get; set; } = true;
 
-    // oGCD Abilities
+    // Buff/Support oGCDs
     public bool UseReassemble { get; set; } = true;
     public bool UseBarrelStabilizer { get; set; } = true;
+
+    // Hypercharge Window
     public bool UseHypercharge { get; set; } = true;
+    public bool UseHeatBlast { get; set; } = true;
     public bool UseWildfire { get; set; } = true;
+
+    // Filler oGCDs (weave between GCDs)
     public bool UseGaussRound { get; set; } = true;
     public bool UseRicochet { get; set; } = true;
 
-    // Basic Combo (usually always on)
-    public bool UseBasicCombo { get; set; } = true;
-    public bool UseHeatBlast { get; set; } = true;
+    // ===== OPENER SETTINGS =====
+    public bool UseOpener { get; set; } = true;  // Whether to use opener sequence at start
 }
