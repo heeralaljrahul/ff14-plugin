@@ -213,8 +213,8 @@ public class MachinistWindow : Window, IDisposable
 
                             if (rotation.IsInOpener)
                             {
-                                var progress = rotation.OpenerStep / 31f;
-                                ImGui.ProgressBar(progress, new Vector2(-1, 12), $"Opener: {rotation.OpenerStep}/31");
+                                var progress = rotation.OpenerStep / 25f;
+                                ImGui.ProgressBar(progress, new Vector2(-1, 12), $"Opener: {rotation.OpenerStep}/25");
                             }
                         }
                     }
