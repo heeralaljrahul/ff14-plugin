@@ -30,7 +30,7 @@ public class MachinistWindow : Window, IDisposable
     private int simulatedPressCount = 3;
 
     public MachinistWindow(Plugin plugin, string machinistImagePath, MachinistRotation rotation)
-        : base("Machinist - Single Target Combo##MachinistWindow", ImGuiWindowFlags.NoScrollbar)
+        : base("MEKANIST - Machinist Combo##MachinistWindow", ImGuiWindowFlags.NoScrollbar)
     {
         SizeConstraints = new WindowSizeConstraints
         {
@@ -87,11 +87,11 @@ public class MachinistWindow : Window, IDisposable
 
         ImGui.BeginGroup();
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1.0f, 0.75f, 0.0f, 1.0f));
-        ImGui.Text("MACHINIST");
+        ImGui.Text("MEKANIST");
         ImGui.PopStyleColor();
 
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.7f, 0.7f, 0.7f, 1.0f));
-        ImGui.Text("Single Target DPS Combo");
+        ImGui.Text("Full auto Machinist combo");
         ImGui.PopStyleColor();
         ImGui.EndGroup();
 

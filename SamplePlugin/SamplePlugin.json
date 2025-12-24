@@ -1,8 +1,8 @@
 {
-  "Author": "your name here",
-  "Name": "Sample Plugin",
-  "Punchline": "A short one-liner that shows up in /xlplugins.",
-  "Description": "A description that shows up in /xlplugins. List any major slash-command(s).",
+  "Author": "MEKANIST Team",
+  "Name": "MEKANIST",
+  "Punchline": "Full auto Machinist rotation with user-selected toggles.",
+  "Description": "plogon for machinist players!",
   "ApplicableVersion": "any",
   "Tags": [
     "sample",
