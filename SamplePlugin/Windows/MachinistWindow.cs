@@ -16,10 +16,18 @@ public class MachinistWindow : Window, IDisposable
     private readonly string machinistImagePath;
     private readonly Plugin plugin;
     private readonly MachinistRotation rotation;
+    private readonly Random random = new();
 
     // Manual action tracking
     private string lastActionResult = "";
     private DateTime lastActionTime = DateTime.MinValue;
+    private string highlightedButton = "";
+
+    // Simulation state
+    private bool simulatePressed;
+    private int simulateQueue;
+    private DateTime nextSimulatedPress = DateTime.MinValue;
+    private int simulatedPressCount = 3;
 
     public MachinistWindow(Plugin plugin, string machinistImagePath, MachinistRotation rotation)
         : base("Machinist - Single Target Combo##MachinistWindow", ImGuiWindowFlags.NoScrollbar)
@@ -41,6 +49,8 @@ public class MachinistWindow : Window, IDisposable
 
     public override void Draw()
     {
+        HandleSimulatedPresses();
+
         DrawHeader();
         ImGui.Separator();
         ImGuiHelpers.ScaledDummy(5.0f);
@@ -184,32 +194,50 @@ public class MachinistWindow : Window, IDisposable
 
             // Big combo start buttons
             var buttonSize = new Vector2(140, 50);
-
-            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.2f, 0.4f, 0.7f, 1.0f));
-            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.3f, 0.5f, 0.8f, 1.0f));
-            ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.4f, 0.6f, 0.9f, 1.0f));
-
-            if (ImGui.Button("1: Split Shot", buttonSize))
-            {
-                OnComboButtonClick(MachinistRotation.HeatedSplitShot, "Heated Split Shot");
-            }
+            DrawComboButton("1: Split Shot", MachinistRotation.HeatedSplitShot, "Heated Split Shot", buttonSize);
             ImGui.SameLine();
-            if (ImGui.Button("2: Slug Shot", buttonSize))
-            {
-                OnComboButtonClick(MachinistRotation.HeatedSlugShot, "Heated Slug Shot");
-            }
+            DrawComboButton("2: Slug Shot", MachinistRotation.HeatedSlugShot, "Heated Slug Shot", buttonSize);
             ImGui.SameLine();
-            if (ImGui.Button("3: Clean Shot", buttonSize))
-            {
-                OnComboButtonClick(MachinistRotation.HeatedCleanShot, "Heated Clean Shot");
-            }
-
-            ImGui.PopStyleColor(3);
+            DrawComboButton("3: Clean Shot", MachinistRotation.HeatedCleanShot, "Heated Clean Shot", buttonSize);
 
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip("Pressing any combo button will:\n1. Execute that ability on your selected target\n2. Auto-start the rotation to continue attacking");
 
             ImGuiHelpers.ScaledDummy(5.0f);
+
+            // Simulation controls
+            ImGui.TextColored(new Vector4(0.7f, 0.9f, 1.0f, 1.0f), "Humanized Button Simulation");
+            var simCount = simulatedPressCount;
+            ImGui.SliderInt("Number of presses", ref simCount, 2, 10, "%d presses");
+            if (simCount != simulatedPressCount)
+            {
+                simulatedPressCount = simCount;
+                lastActionResult = $"Simulation count set to {simulatedPressCount}";
+                lastActionTime = DateTime.Now;
+            }
+
+            if (!simulatePressed)
+            {
+                if (ImGui.Button("Simulate Combo Presses", new Vector2(200, 28)))
+                {
+                    BeginSimulation();
+                }
+            }
+            else
+            {
+                using (ImRaii.Disabled(true))
+                {
+                    ImGui.Button($"Simulating... ({simulateQueue} left)", new Vector2(200, 28));
+                }
+            }
+            ImGui.SameLine();
+            if (ImGui.Button("Stop Simulation", new Vector2(150, 28)))
+            {
+                simulatePressed = false;
+                simulateQueue = 0;
+                lastActionResult = "Simulation cancelled";
+                lastActionTime = DateTime.Now;
+            }
 
             // Rotation info
             if (rotation.IsEnabled)
@@ -630,6 +658,7 @@ public class MachinistWindow : Window, IDisposable
 
         if (result)
         {
+            highlightedButton = actionName;
             lastActionResult = $"Started combo with {actionName} on {target.Name}";
 
             // Auto-start the rotation
@@ -642,5 +671,67 @@ public class MachinistWindow : Window, IDisposable
 
         lastActionTime = DateTime.Now;
         Plugin.Log.Information($"Combo button: {actionName} (ID: {actionId}) - Result: {result}");
+    }
+
+    private void DrawComboButton(string label, uint actionId, string actionName, Vector2 size)
+    {
+        var isHighlighted = highlightedButton == actionName;
+        var baseColor = isHighlighted ? new Vector4(0.9f, 0.2f, 0.2f, 1.0f) : new Vector4(0.2f, 0.4f, 0.7f, 1.0f);
+        var hoverColor = isHighlighted ? new Vector4(1.0f, 0.35f, 0.35f, 1.0f) : new Vector4(0.3f, 0.5f, 0.8f, 1.0f);
+        var activeColor = isHighlighted ? new Vector4(1.0f, 0.25f, 0.25f, 1.0f) : new Vector4(0.4f, 0.6f, 0.9f, 1.0f);
+
+        ImGui.PushStyleColor(ImGuiCol.Button, baseColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hoverColor);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, activeColor);
+
+        if (ImGui.Button(label, size))
+        {
+            OnComboButtonClick(actionId, actionName);
+        }
+
+        ImGui.PopStyleColor(3);
+    }
+
+    private void BeginSimulation()
+    {
+        simulatePressed = true;
+        simulateQueue = simulatedPressCount;
+        nextSimulatedPress = DateTime.Now;
+        lastActionResult = $"Simulating {simulateQueue} presses";
+        lastActionTime = DateTime.Now;
+    }
+
+    private void HandleSimulatedPresses()
+    {
+        if (!simulatePressed)
+            return;
+
+        if (simulateQueue <= 0)
+        {
+            simulatePressed = false;
+            highlightedButton = "";
+            lastActionResult = "Simulation finished";
+            lastActionTime = DateTime.Now;
+            return;
+        }
+
+        if (DateTime.Now < nextSimulatedPress)
+            return;
+
+        // Cycle through combo buttons to mimic human inputs
+        var stepIndex = (simulatedPressCount - simulateQueue) % 3;
+        var action = stepIndex switch
+        {
+            0 => (MachinistRotation.HeatedSplitShot, "Heated Split Shot"),
+            1 => (MachinistRotation.HeatedSlugShot, "Heated Slug Shot"),
+            _ => (MachinistRotation.HeatedCleanShot, "Heated Clean Shot"),
+        };
+
+        OnComboButtonClick(action.Item1, action.Item2);
+        simulateQueue--;
+
+        // Human-like varied delay: 0.28 - 0.55s
+        var delay = 0.28 + random.NextDouble() * 0.27;
+        nextSimulatedPress = DateTime.Now.AddSeconds(delay);
     }
 }
