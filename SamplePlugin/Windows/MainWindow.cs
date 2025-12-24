@@ -12,7 +12,7 @@ public class MainWindow : Window, IDisposable
     private readonly Plugin plugin;
 
     public MainWindow(Plugin plugin)
-        : base("Machinist Plugin##MainWindow", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
+        : base("MEKANIST##MainWindow", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
     {
         SizeConstraints = new WindowSizeConstraints
         {
@@ -27,7 +27,7 @@ public class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
-        ImGui.TextColored(new Vector4(1.0f, 0.75f, 0.0f, 1.0f), "Machinist Rotation Plugin");
+        ImGui.TextColored(new Vector4(1.0f, 0.75f, 0.0f, 1.0f), "MEKANIST - Machinist Automation");
         ImGui.Separator();
         ImGuiHelpers.ScaledDummy(10.0f);
 

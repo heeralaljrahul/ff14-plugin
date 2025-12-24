@@ -325,7 +325,16 @@ public class MachinistRotation : IDisposable
 
     private static bool IsValidTarget(IGameObject? target)
     {
-        return target is IBattleChara battleTarget && !battleTarget.IsDead && battleTarget.IsTargetable;
+        if (target is not IBattleChara battleTarget)
+            return false;
+
+        if (battleTarget.IsDead || !battleTarget.IsTargetable)
+            return false;
+
+        if (battleTarget is IBattleNpc npc)
+            return npc.BattleNpcKind == BattleNpcSubKind.Enemy;
+
+        return false;
     }
 
     private unsafe void ReadGameState()
@@ -405,7 +414,7 @@ public class MachinistRotation : IDisposable
         if (IsOverheated)
         {
             // Weave Wildfire after first Heat Blast (skip if burst disabled)
-            if (canWeave && Settings.UseWildfire && !Settings.DisableBurstPhase && IsReady(actionManager, Wildfire))
+            if (canWeave && IsReadyAndEnabled(actionManager, Wildfire))
             {
                 if (UseAction(actionManager, Wildfire, targetId, "Wildfire", true))
                     return;
@@ -414,24 +423,21 @@ public class MachinistRotation : IDisposable
             // Weave Gauss/Ricochet between Heat Blasts
             if (canWeave)
             {
-                if (Settings.UseGaussRound && IsReady(actionManager, GaussRound))
+                if (IsReadyAndEnabled(actionManager, GaussRound))
                     if (UseAction(actionManager, GaussRound, targetId, "Gauss Round", true)) return;
-                if (Settings.UseGaussRound && IsReady(actionManager, DoubleCheck))
+                if (IsReadyAndEnabled(actionManager, DoubleCheck))
                     if (UseAction(actionManager, DoubleCheck, targetId, "Double Check", true)) return;
-                if (Settings.UseRicochet && IsReady(actionManager, Ricochet))
+                if (IsReadyAndEnabled(actionManager, Ricochet))
                     if (UseAction(actionManager, Ricochet, targetId, "Ricochet", true)) return;
-                if (Settings.UseRicochet && IsReady(actionManager, Checkmate))
+                if (IsReadyAndEnabled(actionManager, Checkmate))
                     if (UseAction(actionManager, Checkmate, targetId, "Checkmate", true)) return;
             }
 
             // Use Heat Blast / Blazing Shot
-            if (Settings.UseHeatBlast)
-            {
-                if (IsReady(actionManager, BlazingShot))
-                    if (UseAction(actionManager, BlazingShot, targetId, "Blazing Shot", false)) return;
-                if (IsReady(actionManager, HeatBlast))
-                    if (UseAction(actionManager, HeatBlast, targetId, "Heat Blast", false)) return;
-            }
+            if (IsReadyAndEnabled(actionManager, BlazingShot))
+                if (UseAction(actionManager, BlazingShot, targetId, "Blazing Shot", false)) return;
+            if (IsReadyAndEnabled(actionManager, HeatBlast))
+                if (UseAction(actionManager, HeatBlast, targetId, "Heat Blast", false)) return;
             return;
         }
 
@@ -439,21 +445,21 @@ public class MachinistRotation : IDisposable
         if (canWeave)
         {
             // Barrel Stabilizer - use on cooldown
-            if (Settings.UseBarrelStabilizer && IsReady(actionManager, BarrelStabilizer))
+            if (IsReadyAndEnabled(actionManager, BarrelStabilizer))
                 if (UseAction(actionManager, BarrelStabilizer, targetId, "Barrel Stabilizer", true)) return;
 
             // Reassemble before tools
-            if (Settings.UseReassemble && IsReady(actionManager, Reassemble))
+            if (IsReadyAndEnabled(actionManager, Reassemble))
             {
-                bool toolReady = (Settings.UseDrill && IsReady(actionManager, Drill)) ||
-                                (Settings.UseAirAnchor && IsReady(actionManager, AirAnchor)) ||
-                                (Settings.UseChainSaw && IsReady(actionManager, ChainSaw));
+                bool toolReady = IsReadyAndEnabled(actionManager, Drill) ||
+                                IsReadyAndEnabled(actionManager, AirAnchor) ||
+                                IsReadyAndEnabled(actionManager, ChainSaw);
                 if (toolReady)
                     if (UseAction(actionManager, Reassemble, targetId, "Reassemble", true)) return;
             }
 
             // Hypercharge - NEVER OVERCAP HEAT (skip if burst disabled, unless overcapping)
-            if (Settings.UseHypercharge && IsReady(actionManager, Hypercharge))
+            if (IsReadyAndEnabled(actionManager, Hypercharge))
             {
                 bool mustUse = CurrentHeat >= 100; // Prevent overcap - use even if burst disabled
                 bool shouldUse = CurrentHeat >= 50 && !Settings.DisableBurstPhase;
@@ -463,38 +469,32 @@ public class MachinistRotation : IDisposable
             }
 
             // Gauss Round / Ricochet - dump charges
-            if (Settings.UseGaussRound)
-            {
-                if (IsReady(actionManager, GaussRound))
-                    if (UseAction(actionManager, GaussRound, targetId, "Gauss Round", true)) return;
-                if (IsReady(actionManager, DoubleCheck))
-                    if (UseAction(actionManager, DoubleCheck, targetId, "Double Check", true)) return;
-            }
-            if (Settings.UseRicochet)
-            {
-                if (IsReady(actionManager, Ricochet))
-                    if (UseAction(actionManager, Ricochet, targetId, "Ricochet", true)) return;
-                if (IsReady(actionManager, Checkmate))
-                    if (UseAction(actionManager, Checkmate, targetId, "Checkmate", true)) return;
-            }
+            if (IsReadyAndEnabled(actionManager, GaussRound))
+                if (UseAction(actionManager, GaussRound, targetId, "Gauss Round", true)) return;
+            if (IsReadyAndEnabled(actionManager, DoubleCheck))
+                if (UseAction(actionManager, DoubleCheck, targetId, "Double Check", true)) return;
+            if (IsReadyAndEnabled(actionManager, Ricochet))
+                if (UseAction(actionManager, Ricochet, targetId, "Ricochet", true)) return;
+            if (IsReadyAndEnabled(actionManager, Checkmate))
+                if (UseAction(actionManager, Checkmate, targetId, "Checkmate", true)) return;
         }
 
         // === PRIORITY 3: Full Metal Field (proc from Barrel Stabilizer) ===
-        if (Settings.UseFullMetalField && IsReady(actionManager, FullMetalField))
+        if (IsReadyAndEnabled(actionManager, FullMetalField))
             if (UseAction(actionManager, FullMetalField, targetId, "Full Metal Field", false)) return;
 
         // === PRIORITY 4: Burst Tools ===
         // Air Anchor > Drill > Chain Saw > Excavator
-        if (Settings.UseAirAnchor && IsReady(actionManager, AirAnchor))
+        if (IsReadyAndEnabled(actionManager, AirAnchor))
             if (UseAction(actionManager, AirAnchor, targetId, "Air Anchor", false)) return;
 
-        if (Settings.UseDrill && IsReady(actionManager, Drill))
+        if (IsReadyAndEnabled(actionManager, Drill))
             if (UseAction(actionManager, Drill, targetId, "Drill", false)) return;
 
-        if (Settings.UseChainSaw && IsReady(actionManager, ChainSaw))
+        if (IsReadyAndEnabled(actionManager, ChainSaw))
             if (UseAction(actionManager, ChainSaw, targetId, "Chain Saw", false)) return;
 
-        if (Settings.UseExcavator && IsReady(actionManager, Excavator))
+        if (IsReadyAndEnabled(actionManager, Excavator))
             if (UseAction(actionManager, Excavator, targetId, "Excavator", false)) return;
 
         // === PRIORITY 5: 1-2-3 Combo ===
@@ -505,32 +505,30 @@ public class MachinistRotation : IDisposable
             if (lastComboAction == SplitShot || lastComboAction == HeatedSplitShot)
             {
                 // Next is Slug Shot
-                if (IsReady(actionManager, HeatedSlugShot))
+                if (IsReadyAndEnabled(actionManager, HeatedSlugShot))
                     if (UseAction(actionManager, HeatedSlugShot, targetId, "Heated Slug Shot", false)) return;
-                if (IsReady(actionManager, SlugShot))
+                if (IsReadyAndEnabled(actionManager, SlugShot))
                     if (UseAction(actionManager, SlugShot, targetId, "Slug Shot", false)) return;
             }
             else if (lastComboAction == SlugShot || lastComboAction == HeatedSlugShot)
             {
                 // Next is Clean Shot
-                if (IsReady(actionManager, HeatedCleanShot))
+                if (IsReadyAndEnabled(actionManager, HeatedCleanShot))
                     if (UseAction(actionManager, HeatedCleanShot, targetId, "Heated Clean Shot", false)) return;
-                if (IsReady(actionManager, CleanShot))
+                if (IsReadyAndEnabled(actionManager, CleanShot))
                     if (UseAction(actionManager, CleanShot, targetId, "Clean Shot", false)) return;
             }
         }
 
         // Start new combo with Split Shot
-        if (IsReady(actionManager, HeatedSplitShot))
+        if (IsReadyAndEnabled(actionManager, HeatedSplitShot))
             if (UseAction(actionManager, HeatedSplitShot, targetId, "Heated Split Shot", false)) return;
-        if (IsReady(actionManager, SplitShot))
+        if (IsReadyAndEnabled(actionManager, SplitShot))
             UseAction(actionManager, SplitShot, targetId, "Split Shot", false);
     }
 
-    private unsafe bool IsReady(ActionManager* am, uint actionId)
-    {
-        return am->GetActionStatus(ActionType.Action, actionId) == 0;
-    }
+    private unsafe bool IsReadyAndEnabled(ActionManager* am, uint actionId) =>
+        IsActionEnabledInSettings(actionId) && am->GetActionStatus(ActionType.Action, actionId) == 0;
 
     private unsafe void UpdateDamageReadinessPreview()
     {
@@ -556,6 +554,9 @@ public class MachinistRotation : IDisposable
 
     private unsafe bool UseAction(ActionManager* am, uint actionId, ulong targetId, string name, bool isOGcd)
     {
+        if (!IsActionEnabledInSettings(actionId))
+            return false;
+
         if (am->UseAction(ActionType.Action, actionId, targetId))
         {
             LastAction = name;
