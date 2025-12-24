@@ -16,18 +16,11 @@ public class MachinistWindow : Window, IDisposable
     private readonly string machinistImagePath;
     private readonly Plugin plugin;
     private readonly MachinistRotation rotation;
-    private readonly Random random = new();
 
     // Manual action tracking
     private string lastActionResult = "";
     private DateTime lastActionTime = DateTime.MinValue;
     private string highlightedButton = "";
-
-    // Simulation state
-    private bool simulatePressed;
-    private int simulateQueue;
-    private DateTime nextSimulatedPress = DateTime.MinValue;
-    private int simulatedPressCount = 3;
 
     public MachinistWindow(Plugin plugin, string machinistImagePath, MachinistRotation rotation)
         : base("MEKANIST - Machinist Combo##MachinistWindow", ImGuiWindowFlags.NoScrollbar)
@@ -49,8 +42,6 @@ public class MachinistWindow : Window, IDisposable
 
     public override void Draw()
     {
-        HandleSimulatedPresses();
-
         DrawHeader();
         ImGui.Separator();
         ImGuiHelpers.ScaledDummy(5.0f);
@@ -204,40 +195,6 @@ public class MachinistWindow : Window, IDisposable
                 ImGui.SetTooltip("Pressing any combo button will:\n1. Execute that ability on your selected target\n2. Auto-start the rotation to continue attacking");
 
             ImGuiHelpers.ScaledDummy(5.0f);
-
-            // Simulation controls
-            ImGui.TextColored(new Vector4(0.7f, 0.9f, 1.0f, 1.0f), "Humanized Button Simulation");
-            var simCount = simulatedPressCount;
-            ImGui.SliderInt("Number of presses", ref simCount, 2, 10, "%d presses");
-            if (simCount != simulatedPressCount)
-            {
-                simulatedPressCount = simCount;
-                lastActionResult = $"Simulation count set to {simulatedPressCount}";
-                lastActionTime = DateTime.Now;
-            }
-
-            if (!simulatePressed)
-            {
-                if (ImGui.Button("Simulate Combo Presses", new Vector2(200, 28)))
-                {
-                    BeginSimulation();
-                }
-            }
-            else
-            {
-                using (ImRaii.Disabled(true))
-                {
-                    ImGui.Button($"Simulating... ({simulateQueue} left)", new Vector2(200, 28));
-                }
-            }
-            ImGui.SameLine();
-            if (ImGui.Button("Stop Simulation", new Vector2(150, 28)))
-            {
-                simulatePressed = false;
-                simulateQueue = 0;
-                lastActionResult = "Simulation cancelled";
-                lastActionTime = DateTime.Now;
-            }
 
             // Rotation info
             if (rotation.IsEnabled)
@@ -690,48 +647,5 @@ public class MachinistWindow : Window, IDisposable
         }
 
         ImGui.PopStyleColor(3);
-    }
-
-    private void BeginSimulation()
-    {
-        simulatePressed = true;
-        simulateQueue = simulatedPressCount;
-        nextSimulatedPress = DateTime.Now;
-        lastActionResult = $"Simulating {simulateQueue} presses";
-        lastActionTime = DateTime.Now;
-    }
-
-    private void HandleSimulatedPresses()
-    {
-        if (!simulatePressed)
-            return;
-
-        if (simulateQueue <= 0)
-        {
-            simulatePressed = false;
-            highlightedButton = "";
-            lastActionResult = "Simulation finished";
-            lastActionTime = DateTime.Now;
-            return;
-        }
-
-        if (DateTime.Now < nextSimulatedPress)
-            return;
-
-        // Cycle through combo buttons to mimic human inputs
-        var stepIndex = (simulatedPressCount - simulateQueue) % 3;
-        var action = stepIndex switch
-        {
-            0 => (MachinistRotation.HeatedSplitShot, "Heated Split Shot"),
-            1 => (MachinistRotation.HeatedSlugShot, "Heated Slug Shot"),
-            _ => (MachinistRotation.HeatedCleanShot, "Heated Clean Shot"),
-        };
-
-        OnComboButtonClick(action.Item1, action.Item2);
-        simulateQueue--;
-
-        // Human-like varied delay: 0.28 - 0.55s
-        var delay = 0.28 + random.NextDouble() * 0.27;
-        nextSimulatedPress = DateTime.Now.AddSeconds(delay);
     }
 }
